@@ -2,19 +2,7 @@ import { localizeTernary } from "../l10n";
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { translations } from '../translations';
 import { tokenFetch, tokenFetchJson } from '../auth/tokenFetch';
-import {
-  FolderCheck,
-  UploadCloud,
-  CheckCircle2,
-  AlertCircle,
-  FileDown,
-  FileText,
-  Sparkles,
-  ArrowRight,
-  RefreshCw,
-  Eye,
-  Trash2
-} from 'lucide-react';
+import { FolderCheck, UploadCloud, CheckCircle2, AlertCircle, FileDown, FileText, Sparkles, ArrowRight, RefreshCw, Eye, Trash2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -43,7 +31,6 @@ export default function DocumentChecklist({ lang = 'en', profile, setProfile, se
   const [viewingDoc, setViewingDoc] = useState(null);
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [uploading, setUploading] = useState(false);
-
   const userId = profile?.id || '';
 
   const localizeDocTitle = (id, fallback) => {
@@ -58,47 +45,35 @@ export default function DocumentChecklist({ lang = 'en', profile, setProfile, se
     return map[id]?.[lang] || fallback;
   };
 
-  const getStatusLabel = (statusType) => {
-    const tCheck = t.checklist || {};
-    if (statusType === 'verified') return tCheck.statusVerified || 'Verified';
-    return tCheck.statusMissing || 'Missing';
+  const getStatusLabel = (type) => {
+    const c = t.checklist || {};
+    return type === 'verified' ? (c.statusVerified || 'Verified') : (c.statusMissing || 'Missing');
   };
 
   const refreshDocuments = async () => {
-    if (!userId) {
-      setUploadedDocs({});
-      setLoadingDocs(false);
-      return;
-    }
+    if (!userId) { setUploadedDocs({}); setLoadingDocs(false); return; }
     setLoadingDocs(true);
     try {
       const rows = await tokenFetchJson('documents/mine');
       const grouped = {};
       (Array.isArray(rows) ? rows : []).forEach((row) => {
-        const config = DOC_CONFIG.find((item) => item.backendKey === row.documentKey && !Object.values(grouped).some((saved) => saved.documentKey === row.documentKey));
+        const config = DOC_CONFIG.find((item) => item.backendKey === row.documentKey && !grouped[item.id]);
         if (!config) return;
-        grouped[config.id] = { ...row, id: config.id, statusType: 'verified' };
+        grouped[config.id] = { ...row, id: row.id, documentKey: row.documentKey, checklistId: config.id, statusType: 'verified' };
       });
       setUploadedDocs(grouped);
       setUploadError(null);
     } catch (err) {
       setUploadError(err?.message || 'Unable to load your saved documents. Please make sure the backend and database are running.');
-    } finally {
-      setLoadingDocs(false);
-    }
+    } finally { setLoadingDocs(false); }
   };
 
-  useEffect(() => {
-    refreshDocuments();
-  }, [userId]);
+  useEffect(() => { refreshDocuments(); }, [userId]);
 
   const triggerFileUpload = (docId) => {
     setUploadError(null);
     setActiveUploadDocId(docId);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = null;
-      fileInputRef.current.click();
-    }
+    if (fileInputRef.current) { fileInputRef.current.value = null; fileInputRef.current.click(); }
   };
 
   const validateFile = (file) => {
@@ -120,29 +95,17 @@ export default function DocumentChecklist({ lang = 'en', profile, setProfile, se
     };
     const item = labels[id];
     if (!item) return;
-    setProfile((p) => ({
-      ...p,
-      ...(item.flag ? { [item.flag]: true } : {}),
-      uploadedDocs: Array.from(new Set([...(p.uploadedDocs || []), item.doc]))
-    }));
+    setProfile((p) => ({ ...p, ...(item.flag ? { [item.flag]: true } : {}), uploadedDocs: Array.from(new Set([...(p.uploadedDocs || []), item.doc])) }));
   };
 
   const uploadDocument = async (file) => {
-    const id = activeUploadDocId;
-    const config = DOC_CONFIG.find((item) => item.id === id);
+    const checklistId = activeUploadDocId;
+    const config = DOC_CONFIG.find((item) => item.id === checklistId);
     const validationError = validateFile(file);
     if (!config) return;
-    if (validationError) {
-      setUploadError(validationError);
-      return;
-    }
-    if (!userId) {
-      setUploadError('Please sign in before uploading documents.');
-      return;
-    }
-
-    setUploading(true);
-    setUploadError(null);
+    if (validationError) { setUploadError(validationError); return; }
+    if (!userId) { setUploadError('Please sign in before uploading documents.'); return; }
+    setUploading(true); setUploadError(null);
     try {
       const form = new FormData();
       form.append('docKey', config.backendKey);
@@ -155,25 +118,16 @@ export default function DocumentChecklist({ lang = 'en', profile, setProfile, se
         throw new Error(detail || `Upload failed with status ${response.status}.`);
       }
       const saved = await response.json();
-      setUploadedDocs((prev) => ({
-        ...prev,
-        [id]: { ...saved, id, documentKey: config.backendKey, byteLength: saved.byteLength ?? file.size, contentType: file.type, statusType: 'verified' }
-      }));
-      updateProfileForUpload(id);
+      setUploadedDocs((prev) => ({ ...prev, [checklistId]: { ...saved, id: saved.id, checklistId, documentKey: config.backendKey, byteLength: saved.byteLength ?? file.size, contentType: file.type, statusType: 'verified', originalFileName: saved.originalFileName || file.name } }));
+      updateProfileForUpload(checklistId);
       setUploadSuccessNotice(isHindi ? `"${file.name}" सफलतापूर्वक सर्वर पर सहेजा गया।` : `"${file.name}" was uploaded and saved successfully.`);
       setTimeout(() => setUploadSuccessNotice(null), 5000);
       confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
-    } catch (err) {
-      setUploadError(err?.message || 'Upload failed. Please try again.');
-    } finally {
-      setUploading(false);
-    }
+    } catch (err) { setUploadError(err?.message || 'Upload failed. Please try again.'); }
+    finally { setUploading(false); }
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) uploadDocument(file);
-  };
+  const handleFileChange = (e) => { const file = e.target.files?.[0]; if (file) uploadDocument(file); };
 
   const openDocument = async (doc) => {
     if (!doc?.id) return;
@@ -182,9 +136,7 @@ export default function DocumentChecklist({ lang = 'en', profile, setProfile, se
       if (!response.ok) throw new Error('Unable to open the saved document.');
       const blob = await response.blob();
       setViewingDoc({ ...doc, previewUrl: URL.createObjectURL(blob), contentType: blob.type || doc.contentType || '' });
-    } catch (err) {
-      setUploadError(err?.message || 'Unable to open the saved document.');
-    }
+    } catch (err) { setUploadError(err?.message || 'Unable to open the saved document.'); }
   };
 
   const deleteDocument = async (doc) => {
@@ -195,9 +147,7 @@ export default function DocumentChecklist({ lang = 'en', profile, setProfile, se
       await refreshDocuments();
       setViewingDoc(null);
       setUploadSuccessNotice('Document deleted successfully.');
-    } catch (err) {
-      setUploadError(err?.message || 'Unable to delete the document.');
-    }
+    } catch (err) { setUploadError(err?.message || 'Unable to delete the document.'); }
   };
 
   const docs = useMemo(() => DOC_CONFIG.map((config) => {
@@ -213,7 +163,7 @@ export default function DocumentChecklist({ lang = 'en', profile, setProfile, se
         <div>
           <div className="inline-flex items-center space-x-2 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full uppercase tracking-wider mb-2"><FolderCheck className="w-3.5 h-3.5 text-emerald-600" /><span>{localizeTernary('दस्तावेज चेकलिस्ट एवं सत्यापन', 'Document Checklist & Verification', lang)}</span></div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">{localizeTernary('सरकारी दस्तावेज डोजियर', 'Government Document Dossier', lang)}</h2>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">{isHindi ? <><strong>{selectedScheme?.schemeName || 'माइक्रो क्रेडिट योजना (MCS)'}</strong> के लिए कॉन्फ़िगर किया गया। अपने कंप्यूटर से दस्तावेज़ अपलोड करें और सुरक्षित रूप से सहेजें।</> : <>Configured for <strong>{selectedScheme?.schemeName || 'Micro Credit Scheme (MCS)'}</strong>. Upload documents from your computer and save them securely on the server.</>}</p>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">{isHindi ? <> <strong>{selectedScheme?.schemeName || 'माइक्रो क्रेडिट योजना (MCS)'}</strong> के लिए कॉन्फ़िगर किया गया। अपने कंप्यूटर से दस्तावेज़ अपलोड करें और सुरक्षित रूप से सहेजें। </> : <>Configured for <strong>{selectedScheme?.schemeName || 'Micro Credit Scheme (MCS)'}</strong>. Upload documents from your computer and save them securely on the server.</>}</p>
         </div>
         <div className="bg-slate-100 border border-slate-200 text-slate-700 text-xs px-3 py-2 rounded-xl font-medium">✓ PDF, JPG, PNG • Max 5 MB</div>
       </div>
@@ -227,7 +177,7 @@ export default function DocumentChecklist({ lang = 'en', profile, setProfile, se
 
       <div className="flex justify-end pt-2"><button onClick={onProceedToPack} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center space-x-2 cursor-pointer active:scale-95"><span>View Application Pack →</span><ArrowRight className="w-3.5 h-3.5" /></button></div>
 
-      {viewingDoc && <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4"><div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-4 border border-slate-200 shadow-2xl relative max-h-[90vh] overflow-y-auto"><button onClick={() => { URL.revokeObjectURL(viewingDoc.previewUrl); setViewingDoc(null); }} className="absolute right-5 top-5 text-slate-400 hover:text-slate-700 font-bold">✕</button><div className="border-b border-slate-200 pb-4 text-center"><div className="inline-flex items-center space-x-2 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider"><Sparkles className="w-3 h-3 text-emerald-600" /><span>Saved Beneficiary Document</span></div><h3 className="text-lg font-black text-slate-900 mt-2">{localizeDocTitle(viewingDoc.id, docs.find((d) => d.id === viewingDoc.id)?.name || 'Document')}</h3><p className="text-xs text-slate-500 font-mono mt-1">{viewingDoc.originalFileName} ({formatBytes(viewingDoc.byteLength)})</p></div><div className="border rounded-2xl overflow-hidden bg-slate-100 p-2 min-h-[300px] flex items-center justify-center">{(viewingDoc.contentType || '').startsWith('image/') ? <img src={viewingDoc.previewUrl} alt={viewingDoc.originalFileName} className="max-h-[60vh] w-auto mx-auto object-contain rounded-xl shadow-md" /> : <iframe src={viewingDoc.previewUrl} title={viewingDoc.originalFileName} className="w-full h-[60vh] rounded-xl border border-slate-300" />}</div><div className="flex items-center justify-between"><button onClick={() => deleteDocument(viewingDoc)} className="text-xs font-bold text-rose-700 hover:text-rose-800 flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" />Delete</button><div className="flex items-center gap-2"><button onClick={() => { const a = document.createElement('a'); a.href = viewingDoc.previewUrl; a.download = viewingDoc.originalFileName; a.click(); }} className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5"><FileDown className="w-3.5 h-3.5" />Download</button><button onClick={() => { URL.revokeObjectURL(viewingDoc.previewUrl); setViewingDoc(null); }} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2 rounded-xl text-xs">Done</button></div></div></div></div>}
+      {viewingDoc && <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4"><div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-4 border border-slate-200 shadow-2xl relative max-h-[90vh] overflow-y-auto"><button onClick={() => { URL.revokeObjectURL(viewingDoc.previewUrl); setViewingDoc(null); }} className="absolute right-5 top-5 text-slate-400 hover:text-slate-700 font-bold">✕</button><div className="border-b border-slate-200 pb-4 text-center"><div className="inline-flex items-center space-x-2 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider"><Sparkles className="w-3 h-3 text-emerald-600" /><span>Saved Beneficiary Document</span></div><h3 className="text-lg font-black text-slate-900 mt-2">{localizeDocTitle(viewingDoc.checklistId, docs.find((d) => d.id === viewingDoc.checklistId)?.name || 'Document')}</h3><p className="text-xs text-slate-500 font-mono mt-1">{viewingDoc.originalFileName} ({formatBytes(viewingDoc.byteLength)})</p></div><div className="border rounded-2xl overflow-hidden bg-slate-100 p-2 min-h-[300px] flex items-center justify-center">{(viewingDoc.contentType || '').startsWith('image/') ? <img src={viewingDoc.previewUrl} alt={viewingDoc.originalFileName} className="max-h-[60vh] w-auto mx-auto object-contain rounded-xl shadow-md" /> : <iframe src={viewingDoc.previewUrl} title={viewingDoc.originalFileName} className="w-full h-[60vh] rounded-xl border border-slate-300" /></div><div className="flex items-center justify-between"><button onClick={() => deleteDocument(viewingDoc)} className="text-xs font-bold text-rose-700 hover:text-rose-800 flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" />Delete</button><div className="flex items-center gap-2"><button onClick={() => { const a = document.createElement('a'); a.href = viewingDoc.previewUrl; a.download = viewingDoc.originalFileName; a.click(); }} className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5"><FileDown className="w-3.5 h-3.5" />Download</button><button onClick={() => { URL.revokeObjectURL(viewingDoc.previewUrl); setViewingDoc(null); }} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2 rounded-xl text-xs">Done</button></div></div></div></div>}
 
       {loadingDocs && <div className="fixed bottom-4 right-4 bg-white border border-slate-200 shadow-lg rounded-xl px-4 py-2 text-xs font-bold text-slate-600">Loading saved documents…</div>}
     </div>
