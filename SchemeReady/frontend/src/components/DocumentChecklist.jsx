@@ -1,187 +1,344 @@
 import { localizeTernary } from "../l10n";
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { translations } from '../translations';
-import { 
-  FolderCheck, UploadCloud, CheckCircle2, Clock, AlertCircle, FileDown, FileText, Sparkles, ArrowRight, RefreshCw, Eye
+import { tokenFetch, tokenFetchJson, API_BASE } from '../auth/tokenFetch';
+import {
+  FolderCheck,
+  UploadCloud,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  FileDown,
+  FileText,
+  Sparkles,
+  ArrowRight,
+  RefreshCw,
+  Eye,
+  Trash2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { createObjectUrl, listDocuments, revokeObjectUrl, saveDocument } from '../storage/documentStorage';
 
-const BASE_DOCS = [
-  { id: 'doc-aadhaar', name: 'Aadhaar / Voter ID (KYC)', status: 'Missing', statusType: 'missing', actionType: 'upload', mandatory: true },
-  { id: 'doc-caste', name: 'Caste Certificate (RD Number)', status: 'Missing', statusType: 'missing', actionType: 'upload', mandatory: true },
-  { id: 'doc-income', name: 'Income Certificate', status: 'Missing', statusType: 'missing', actionType: 'upload', mandatory: true },
-  { id: 'doc-bank', name: 'Bank Account Passbook / Proof', status: 'Missing', statusType: 'missing', actionType: 'upload', mandatory: true },
-  { id: 'doc-quotation', name: 'Business / Machinery Quotation', status: 'Missing', statusType: 'missing', actionType: 'upload', mandatory: false },
-  { id: 'doc-dpr', name: 'One-Page Project Report (DPR)', status: 'Generated', statusType: 'generated', actionType: 'download', mandatory: true, fileName: 'project_viability_report.pdf', fileSize: '185 KB' }
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const ACCEPTED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+
+const DOC_CONFIG = [
+  { id: 'doc-aadhaar', backendKey: 'identity', name: 'Aadhaar / Voter ID (KYC)', mandatory: true },
+  { id: 'doc-caste', backendKey: 'caste_cert', name: 'Caste Certificate (RD Number)', mandatory: true },
+  { id: 'doc-income', backendKey: 'income_cert', name: 'Income Certificate', mandatory: true },
+  { id: 'doc-bank', backendKey: 'identity', name: 'Bank Account Passbook / Proof', mandatory: true },
+  { id: 'doc-quotation', backendKey: 'quotation', name: 'Business / Machinery Quotation', mandatory: false }
 ];
 
-export default function DocumentChecklist({ lang = 'en', profile, setProfile, selectedScheme, onProceedToPack }) {
+function formatBytes(bytes) {
+  if (bytes > 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+export default function DocumentChecklist({
+  lang = 'en',
+  profile,
+  setProfile,
+  selectedScheme,
+  onProceedToPack
+}) {
   const t = translations[lang] || translations.en;
   const isHindi = lang === 'hi';
   const fileInputRef = useRef(null);
   const [activeUploadDocId, setActiveUploadDocId] = useState(null);
   const [uploadSuccessNotice, setUploadSuccessNotice] = useState(null);
-  const [savedDocs, setSavedDocs] = useState([]);
-  const [docs, setDocs] = useState(BASE_DOCS);
+  const [uploadError, setUploadError] = useState(null);
+  const [uploadedDocs, setUploadedDocs] = useState({});
   const [viewingDoc, setViewingDoc] = useState(null);
-  const [digiLockerSyncing, setDigiLockerSyncing] = useState(false);
+  const [loadingDocs, setLoadingDocs] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
-  const userId = profile?.id || 'anonymous';
+  const userId = profile?.id || '';
 
-  const getDocTitle = (id, fallback) => {
+  const localizeDocTitle = (id, fallback) => {
     if (lang === 'en') return fallback;
     const map = {
       'doc-aadhaar': { hi: 'आधार / मतदाता पहचान पत्र (KYC)', kn: 'ಆಧಾರ್ / ಮತದಾರರ ಗುರುತಿನ ಚೀಟಿ (KYC)', ta: 'ஆதார் / வாக்காளர் அடையாள அட்டை (KYC)', te: 'ఆధార్ / ఓటర్ ఐడి (KYC)', mr: 'आधार / मतदार ओळखपत्र (KYC)', bn: 'আধার / ভোটার পরিচয়পত্র (KYC)' },
       'doc-caste': { hi: 'जाति प्रमाण पत्र (आरडी नंबर)', kn: 'ಜಾತಿ ಪ್ರಮಾಣಪತ್ರ (RD ಸಂಖ್ಯೆ)', ta: 'சாதி சான்றிதழ் (RD எண்)', te: 'కుల ధృవీకరణ పత్రం (RD నంబర్)', mr: 'जातीचे प्रमाणपत्र (RD क्रमांक)', bn: 'জাতিগত শংসাপত্র (RD নম্বর)' },
-      'doc-income': { hi: 'आय प्रमाण पत्र (तहसीलदार प्रमाणित)', kn: 'ಆದಾಯ ಪ್ರಮಾಣಪತ್ರ (ತಹಶೀಲ್ದಾರ್ ದೃಢೀಕರಿಸಿದ)', ta: 'வருமான சான்றிதழ் (வட்டாட்சியர் சான்றளித்தது)', te: 'ఆదాయ ధృవీకరణ పత్రం (తహశీల్దార్ ధృవీకరించినది)', mr: 'उत्पन्न प्रमाणपत्र (तहसीलदार प्रमाणित)', bn: 'আয় শংসাপত্র (তহশিলদার প্রত্যয়িত)' },
+      'doc-income': { hi: 'आय प्रमाण पत्र', kn: 'ಆದಾಯ ಪ್ರಮಾಣಪತ್ರ', ta: 'வருமான சான்றிதழ்', te: 'ఆదాయ ధృవీకరణ పత్రం', mr: 'उत्पन्न प्रमाणपत्र', bn: 'আয় শংসাপত্র' },
       'doc-bank': { hi: 'बैंक खाता पासबुक / प्रमाण', kn: 'ಬ್ಯಾಂಕ್ ಖಾತೆ ಪಾಸ್‌ಬುಕ್ / ಪುರಾವೆ', ta: 'வங்கி கணக்கு பாஸ்புக் / சான்று', te: 'బ్యాంక్ ఖాతా పాస్‌బుక్ / రుజువు', mr: 'बँक खाते पासबुक / पुरावा', bn: 'ব্যাংক একাউন্ট পাসবই / প্রমাণ' },
-      'doc-quotation': { hi: 'व्यावसायिक मशीनरी / स्टॉक कोटेशन', kn: 'ವ್ಯಾಪಾರ ಯಂತ್ರೋಪಕರಣ / ಸ್ಟಾಕ್ ಕೊಟೇಶನ್', ta: 'வணிக இயந்திரங்கள் / இருப்பு விலைப்புள்ளி', te: 'వ్యాపార యంత్రాలు / స్టాక్ కొటేషన్', mr: 'व्यावसायिक यंत्रसामग्री / स्टॉक कोटेशन', bn: 'বাণিজ্যিক যন্ত্রপাতি / স্টক কোটেশন' },
-      'doc-dpr': { hi: 'एक-पेज प्रोजेक्ट रिपोर्ट (डीपीआर)', kn: 'ಒಂದು ಪುಟದ ಯೋಜನಾ ವರದಿ (DPR)', ta: 'ஒரு பக்க திட்ட அறிக்கை (DPR)', te: 'ఒక పేజీ ప్రాజెక్ట్ నివేదిక (DPR)', mr: 'एक-पानी प्रकल्प अहवाल (DPR)', bn: 'এক পৃষ্ঠার প্রকল্প প্রতিবেদন (DPR)' }
+      'doc-quotation': { hi: 'व्यावसायिक मशीनरी / स्टॉक कोटेशन', kn: 'ವ್ಯಾಪಾರ ಯಂತ್ರೋಪಕರಣ / ಸ್ಟಾಕ್ ಕೊಟೇಶನ್', ta: 'வணிக இயந்திரங்கள் / இருப்பு விலைப்புள்ளி', te: 'వ్యాపార యంత్రాలు / స్టాక్ కొటేషన్', mr: 'व्यावसायिक यंत्रसामग्री / स्टॉक कोटेशन', bn: 'বাণিজ্যিক যন্ত্রপাতি / স্টক কোটেশন' }
     };
-    return map[id]?.[lang] || map[id]?.hi || fallback;
+    return map[id]?.[lang] || fallback;
   };
 
-  const getStatusLabel = (statusType, rawStatus) => {
+  const getStatusLabel = (doc) => {
     const tCheck = t.checklist || {};
-    if (statusType === 'verified') return tCheck.statusVerified || 'Verified';
-    if (statusType === 'pending') return tCheck.statusPending || 'Pending review';
-    if (statusType === 'missing') return tCheck.statusMissing || 'Missing';
-    if (statusType === 'uploaded') return tCheck.statusUploaded || 'Uploaded';
-    if (statusType === 'generated') return tCheck.statusGenerated || 'Generated';
-    return rawStatus;
+    if (doc?.statusType === 'verified') return tCheck.statusVerified || 'Verified';
+    if (doc?.statusType === 'pending') return tCheck.statusPending || 'Pending review';
+    if (doc?.statusType === 'uploaded') return tCheck.statusUploaded || 'Uploaded';
+    return tCheck.statusMissing || 'Missing';
   };
 
-  const hydrateDocuments = async () => {
+  const refreshDocuments = async () => {
+    if (!userId) {
+      setUploadedDocs({});
+      setLoadingDocs(false);
+      return;
+    }
+
+    setLoadingDocs(true);
     try {
-      const records = await listDocuments(userId);
-      setSavedDocs(records);
-      setDocs(prev => prev.map(doc => {
-        const record = records.find(item => item.docId === doc.id);
-        if (!record) return doc;
-        return {
-          ...doc,
-          status: 'Uploaded',
-          statusType: 'uploaded',
-          fileName: record.name,
-          fileSize: record.size > 1024 * 1024 ? `${(record.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(record.size / 1024))} KB`
+      const rows = await tokenFetchJson('documents/mine');
+      const grouped = {};
+      (Array.isArray(rows) ? rows : []).forEach((row) => {
+        const config = DOC_CONFIG.find((item) => item.backendKey === row.documentKey && !grouped[item.id]);
+        if (!config) return;
+        grouped[config.id] = {
+          ...row,
+          id: config.id,
+          documentKey: row.documentKey,
+          statusType: 'verified',
+          status: 'Verified',
+          fileSize: row.byteLength,
+          previewUrl: null
         };
-      }));
-    } catch (error) {
-      setUploadSuccessNotice(`Document storage is unavailable: ${error.message}`);
-      setTimeout(() => setUploadSuccessNotice(null), 5000);
+      });
+      setUploadedDocs(grouped);
+    } catch (err) {
+      setUploadError('Unable to load your saved documents from the server. Please make sure the backend is running.');
+    } finally {
+      setLoadingDocs(false);
     }
   };
 
   useEffect(() => {
-    hydrateDocuments();
+    refreshDocuments();
+    return () => {
+      Object.values(uploadedDocs).forEach((doc) => {
+        if (doc?.previewUrl) URL.revokeObjectURL(doc.previewUrl);
+      });
+    };
   }, [userId]);
 
   const triggerFileUpload = (docId) => {
+    setUploadError(null);
     setActiveUploadDocId(docId);
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = null;
       fileInputRef.current.click();
     }
   };
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    const id = activeUploadDocId;
-    if (!file || !id) return;
+  const validateFile = (file) => {
+    const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
+    const extensionAllowed = ['.pdf', '.jpg', '.jpeg', '.png'].includes(extension);
+    if (!extensionAllowed) return 'Please upload a PDF, JPG/JPEG, or PNG file.';
+    if (!ACCEPTED_TYPES.has(file.type)) return 'The selected file type is not supported. Please choose a PDF, JPG/JPEG, or PNG file.';
+    if (file.size < 1) return 'The selected file is empty.';
+    if (file.size > MAX_UPLOAD_BYTES) return 'File size must be 5 MB or smaller.';
+    return null;
+  };
 
-    const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    const extensionOk = /\.(pdf|png|jpe?g|doc|docx)$/i.test(file.name);
-    const maxSize = 10 * 1024 * 1024;
-    if ((!allowedTypes.includes(file.type) && !extensionOk) || file.size > maxSize) {
-      setUploadSuccessNotice('Upload failed: please select a PDF, JPG, JPEG, PNG, DOC, or DOCX file up to 10 MB.');
-      setTimeout(() => setUploadSuccessNotice(null), 5000);
+  const updateProfileForUpload = (id) => {
+    if (id === 'doc-caste') {
+      setProfile((p) => ({ ...p, hasCasteCertificate: true, uploadedDocs: Array.from(new Set([...(p.uploadedDocs || []), 'Caste certificate'])) }));
+    } else if (id === 'doc-income') {
+      setProfile((p) => ({ ...p, hasIncomeCertificate: true, uploadedDocs: Array.from(new Set([...(p.uploadedDocs || []), 'Income certificate'])) }));
+    } else if (id === 'doc-quotation') {
+      setProfile((p) => ({ ...p, uploadedDocs: Array.from(new Set([...(p.uploadedDocs || []), 'Business quotation'])) }));
+    } else if (id === 'doc-aadhaar') {
+      setProfile((p) => ({ ...p, uploadedDocs: Array.from(new Set([...(p.uploadedDocs || []), 'Aadhaar/KYC'])) }));
+    } else if (id === 'doc-bank') {
+      setProfile((p) => ({ ...p, uploadedDocs: Array.from(new Set([...(p.uploadedDocs || []), 'Bank passbook'])) }));
+    }
+  };
+
+  const uploadDocument = async (file) => {
+    const id = activeUploadDocId;
+    const config = DOC_CONFIG.find((item) => item.id === id);
+    const validationError = validateFile(file);
+    if (!config) return;
+    if (validationError) {
+      setUploadError(validationError);
+      return;
+    }
+    if (!userId) {
+      setUploadError('Please sign in before uploading documents.');
       return;
     }
 
+    setUploading(true);
+    setUploadError(null);
     try {
-      await saveDocument(userId, id, file);
-      await hydrateDocuments();
+      const form = new FormData();
+      form.append('docKey', config.backendKey);
+      form.append('file', file);
+      if (profile?.applicationPackId) form.append('applicationPackId', profile.applicationPackId);
 
-      if (id === 'doc-caste') {
-        setProfile(p => ({ ...p, hasCasteCertificate: true, uploadedDocs: Array.from(new Set([...(p.uploadedDocs || []), 'Caste certificate'])) }));
-      } else if (id === 'doc-income') {
-        setProfile(p => ({ ...p, hasIncomeCertificate: true, uploadedDocs: Array.from(new Set([...(p.uploadedDocs || []), 'Income certificate'])) }));
-      } else if (id === 'doc-quotation') {
-        setProfile(p => ({ ...p, uploadedDocs: Array.from(new Set([...(p.uploadedDocs || []), 'Business quotation'])) }));
-      } else if (id === 'doc-aadhaar') {
-        setProfile(p => ({ ...p, uploadedDocs: Array.from(new Set([...(p.uploadedDocs || []), 'Aadhaar/KYC'])) }));
-      } else if (id === 'doc-bank') {
-        setProfile(p => ({ ...p, uploadedDocs: Array.from(new Set([...(p.uploadedDocs || []), 'Bank passbook'])) }));
+      const response = await tokenFetch('documents', { method: 'POST', body: form });
+      if (!response.ok) {
+        let detail = '';
+        try {
+          const body = await response.json();
+          detail = body?.error || '';
+        } catch {}
+        throw new Error(detail || `Upload failed with status ${response.status}.`);
       }
 
-      const sizeText = file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1024))} KB`;
-      setUploadSuccessNotice(isHindi ? `"${file.name}" सफलतापूर्वक सहेजा गया (${sizeText})। अब आप इसे देख सकते हैं।` : `"${file.name}" uploaded successfully (${sizeText}). You can view it now.`);
+      const saved = await response.json();
+      setUploadedDocs((prev) => ({
+        ...prev,
+        [id]: {
+          ...saved,
+          id,
+          documentKey: config.backendKey,
+          originalFileName: saved.originalFileName || file.name,
+          byteLength: saved.byteLength ?? file.size,
+          fileSize: saved.byteLength ?? file.size,
+          contentType: file.type,
+          status: 'Verified',
+          statusType: 'verified',
+          previewUrl: null
+        }
+      }));
+      updateProfileForUpload(id);
+      setUploadSuccessNotice(isHindi
+        ? `"${file.name}" सफलतापूर्वक सर्वर पर सहेजा गया।`
+        : `"${file.name}" was uploaded and saved successfully.`);
       setTimeout(() => setUploadSuccessNotice(null), 5000);
       confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
-    } catch (error) {
-      setUploadSuccessNotice(`Upload failed: ${error.message}`);
-      setTimeout(() => setUploadSuccessNotice(null), 5000);
+    } catch (err) {
+      setUploadError(err?.message || 'Upload failed. Please try again.');
     } finally {
-      e.target.value = '';
+      setUploading(false);
     }
   };
 
-  const handleView = async (doc) => {
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    uploadDocument(file);
+  };
+
+  const openDocument = async (doc) => {
+    if (!doc?.id) return;
+    const id = doc.id;
+    const stored = uploadedDocs[id] || doc;
+    setUploadError(null);
     try {
-      const records = await listDocuments(userId);
-      const record = records.find(item => item.docId === doc.id);
-      if (!record) {
-        setViewingDoc({ ...doc, missingFile: true });
-        return;
-      }
-      const url = createObjectUrl(record);
-      setViewingDoc({ ...doc, fileName: record.name, fileSize: record.size > 1024 * 1024 ? `${(record.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(record.size / 1024))} KB`, previewUrl: url, recordType: record.type });
-    } catch (error) {
-      setUploadSuccessNotice(`Unable to open document: ${error.message}`);
-      setTimeout(() => setUploadSuccessNotice(null), 5000);
+      const response = await tokenFetch(`documents/${stored.id}`);
+      if (!response.ok) throw new Error('Unable to open the saved document.');
+      const blob = await response.blob();
+      const previewUrl = URL.createObjectURL(blob);
+      setViewingDoc({ ...stored, previewUrl, contentType: blob.type || stored.contentType || '' });
+    } catch (err) {
+      setUploadError(err?.message || 'Unable to open the saved document.');
     }
   };
 
-  const closeViewer = () => {
-    if (viewingDoc?.previewUrl) revokeObjectUrl(viewingDoc.previewUrl);
-    setViewingDoc(null);
+  const deleteDocument = async (doc) => {
+    if (!doc?.id) return;
+    try {
+      const response = await tokenFetch(`documents/${doc.id}`, { method: 'DELETE' });
+      if (!response.ok && response.status !== 204) throw new Error('Unable to delete the document.');
+      setUploadedDocs((prev) => {
+        const next = { ...prev };
+        delete next[doc.id === doc.id ? doc.id : ''];
+        return next;
+      });
+      setUploadedDocs((prev) => {
+        const next = { ...prev };
+        const docId = Object.keys(next).find((key) => next[key]?.id === doc.id);
+        if (docId) delete next[docId];
+        return next;
+      });
+      setProfile((p) => ({ ...p, uploadedDocs: (p.uploadedDocs || []).filter((name) => {
+        if (doc.documentKey === 'caste_cert') return name !== 'Caste certificate';
+        if (doc.documentKey === 'income_cert') return name !== 'Income certificate';
+        if (doc.documentKey === 'quotation') return name !== 'Business quotation';
+        if (doc.documentKey === 'identity') return !['Aadhaar/KYC', 'Bank passbook'].includes(name);
+        return true;
+      }) }));
+      setViewingDoc(null);
+      setUploadSuccessNotice('Document deleted successfully.');
+      await refreshDocuments();
+    } catch (err) {
+      setUploadError(err?.message || 'Unable to delete the document.');
+    }
   };
 
-  const handleDigiLockerBulkSync = () => {
-    setDigiLockerSyncing(true);
-    setTimeout(() => setDigiLockerSyncing(false), 1000);
-    setUploadSuccessNotice('DigiLocker sync is a UI simulation; use device upload for persistent files.');
-    setTimeout(() => setUploadSuccessNotice(null), 5000);
-  };
+  const docs = useMemo(() => DOC_CONFIG.map((config) => {
+    const saved = uploadedDocs[config.id];
+    return {
+      ...config,
+      status: saved ? 'Verified' : 'Missing',
+      statusType: saved ? 'verified' : 'missing',
+      actionType: 'upload',
+      fileName: saved?.originalFileName || null,
+      fileSize: saved?.byteLength ?? null,
+      fileId: saved?.id || null
+    };
+  }), [uploadedDocs]);
 
-  const pendingDocs = docs.filter(d => d.statusType === 'missing' || d.statusType === 'pending');
+  const pendingDocs = docs.filter((d) => d.statusType === 'missing');
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6 font-sans">
-      <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" />
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        className="hidden"
+        accept=".pdf,.png,.jpg,.jpeg"
+      />
 
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <div className="inline-flex items-center space-x-2 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full uppercase tracking-wider mb-2"><FolderCheck className="w-3.5 h-3.5 text-emerald-600" /><span>{localizeTernary('दस्तावेज चेकलिस्ट एवं सत्यापन', 'Document Checklist & Verification', lang)}</span></div>
+          <div className="inline-flex items-center space-x-2 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+            <FolderCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{localizeTernary('दस्तावेज चेकलिस्ट एवं सत्यापन', 'Document Checklist & Verification', lang)}</span>
+          </div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">{localizeTernary('सरकारी दस्तावेज डोजियर', 'Government Document Dossier', lang)}</h2>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">Configured for <strong>{selectedScheme?.schemeName || 'Micro Credit Scheme (MCS)'}</strong>. Upload a file from your device and it will be stored for this user in browser storage.</p>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            {isHindi ? <> <strong>{selectedScheme?.schemeName || 'माइक्रो क्रेडिट योजना (MCS)'}</strong> के लिए कॉन्फ़िगर किया गया। अपने कंप्यूटर से दस्तावेज़ अपलोड करें और सुरक्षित रूप से सहेजें। </> : <>Configured for <strong>{selectedScheme?.schemeName || 'Micro Credit Scheme (MCS)'}</strong>. Upload documents from your computer and save them securely.</>}
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button onClick={handleDigiLockerBulkSync} disabled={digiLockerSyncing} className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center space-x-2 transition-all shadow-xs active:scale-95 cursor-pointer"><Sparkles className="w-3.5 h-3.5 text-emerald-300" /><span>{digiLockerSyncing ? 'Fetching...' : '1-Click DigiLocker Sync'}</span></button>
-          <div className="bg-slate-100 border border-slate-200 text-slate-700 text-xs px-3 py-2 rounded-xl font-medium">✓ PDF, JPG, PNG supported · Max 10 MB</div>
-        </div>
+        <div className="bg-slate-100 border border-slate-200 text-slate-700 text-xs px-3 py-2 rounded-xl font-medium">✓ PDF, JPG, PNG • Max 5 MB</div>
       </div>
 
       {uploadSuccessNotice && <div className="p-3.5 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-2xl text-xs flex items-center space-x-2.5"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /><span className="font-bold">{uploadSuccessNotice}</span></div>}
+      {uploadError && <div className="p-3.5 bg-rose-50 border border-rose-300 text-rose-900 rounded-2xl text-xs flex items-center space-x-2.5"><AlertCircle className="w-4 h-4 text-rose-600 shrink-0" /><span className="font-bold">{uploadError}</span></div>}
 
-      {pendingDocs.length > 0 ? <div className="bg-amber-50/80 border border-amber-300/80 rounded-2xl p-4 text-xs space-y-2 text-left"><div className="flex items-center space-x-2 text-amber-900 font-bold"><AlertCircle className="w-4 h-4 text-amber-600 shrink-0" /><span>{isHindi ? `लंबित दस्तावेज सुधार (${pendingDocs.length} कार्रवाइयां आवश्यक)` : `Pending Document Remediation (${pendingDocs.length} Actions Needed)`}</span></div><p className="text-amber-800 text-[11px] leading-relaxed">{localizeTernary('ऋण मूल्यांकन से पहले चैनल पार्टनर्स को सत्यापित दस्तावेजों की आवश्यकता होती है। अपने कंप्यूटर से चुनने और अपलोड करने के लिए नीचे क्लिक करें:', 'Channel Partners require verified documentation before loan appraisal. Choose and upload files from your computer:', lang)}</p><div className="flex flex-wrap gap-2 pt-1">{pendingDocs.map(pd => <span key={pd.id} className="bg-white border border-amber-300 text-amber-900 px-3 py-1.5 rounded-xl font-semibold text-xs flex items-center space-x-2 shadow-xs"><span>⚠️</span><span>{getDocTitle(pd.id, pd.name)}</span><button onClick={() => triggerFileUpload(pd.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2.5 py-1 rounded-lg inline-flex items-center space-x-1"><UploadCloud className="w-3 h-3" /><span>{localizeTernary('फ़ाइल चुनें', 'Choose File', lang)}</span></button></span>)}</div></div> : <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-4 text-xs flex items-center justify-between"><div className="flex items-center space-x-2 text-emerald-900 font-bold"><CheckCircle2 className="w-4 h-4 text-emerald-600" /><span>{localizeTernary('सभी आवश्यक दस्तावेज सत्यापित!', 'All Required Documents Uploaded!', lang)}</span></div></div>}
+      {pendingDocs.length > 0 ? (
+        <div className="bg-amber-50/80 border border-amber-300/80 rounded-2xl p-4 text-xs space-y-2 text-left">
+          <div className="flex items-center space-x-2 text-amber-900 font-bold"><AlertCircle className="w-4 h-4 text-amber-600 shrink-0" /><span>{isHindi ? `लंबित दस्तावेज सुधार (${pendingDocs.length} कार्रवाइयां आवश्यक)` : `Pending Document Remediation (${pendingDocs.length} Actions Needed)`}</span></div>
+          <p className="text-amber-800 text-[11px] leading-relaxed font-normal">{localizeTernary('सत्यापित दस्तावेज अपलोड करने के लिए नीचे क्लिक करें:', 'Click below to select and upload your verified documents:', lang)}</p>
+          <div className="flex flex-wrap gap-2 pt-1">{pendingDocs.map((pd) => <span key={pd.id} className="bg-white border border-amber-300 text-amber-900 px-3 py-1.5 rounded-xl font-semibold text-xs flex items-center space-x-2"><span>⚠️</span><span>{localizeDocTitle(pd.id, pd.name)}</span><button disabled={uploading} onClick={() => triggerFileUpload(pd.id)} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-[10px] px-2.5 py-1 rounded-lg transition-all cursor-pointer inline-flex items-center space-x-1"><UploadCloud className="w-3 h-3" /><span>{localizeTernary('फ़ाइल चुनें', 'Choose File', lang)}</span></button></span>)}</div>
+        </div>
+      ) : (
+        <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-4 text-xs flex items-center justify-between"><div className="flex items-center space-x-2 text-emerald-900 font-bold"><CheckCircle2 className="w-4 h-4 text-emerald-600" /><span>{localizeTernary('सभी आवश्यक दस्तावेज सत्यापित!', 'All required documents verified!', lang)}</span></div><span className="bg-emerald-200 text-emerald-900 px-2.5 py-0.5 rounded-full text-[10px] font-bold">100% Bank Ready</span></div>
+      )}
 
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden"><table className="w-full text-left text-xs border-collapse"><thead><tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold"><th className="p-4">Document Title</th><th className="p-4">Requirement</th><th className="p-4">Status</th><th className="p-4">Attached File</th><th className="p-4 text-right">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{docs.map(doc => { const isUploaded = doc.statusType === 'uploaded'; const isGenerated = doc.statusType === 'generated'; return <tr key={doc.id} className="hover:bg-slate-50/50"><td className="p-4 font-bold text-slate-900"><div className="flex items-center space-x-2"><FileText className="w-4 h-4 text-slate-400" /><span>{getDocTitle(doc.id, doc.name)}</span></div></td><td className="p-4 text-slate-600">{doc.mandatory ? 'Mandatory' : 'Optional / As Required'}</td><td className="p-4"><span className={`inline-flex items-center space-x-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ${isUploaded || isGenerated ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>{isUploaded || isGenerated ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}<span>{getStatusLabel(doc.statusType, doc.status)}</span></span></td><td className="p-4 font-mono text-[11px] text-slate-600">{doc.fileName ? <button onClick={() => handleView(doc)} className="text-emerald-700 hover:text-emerald-900 underline font-semibold cursor-pointer truncate max-w-[180px]" title="Click to view document">{doc.fileName}</button> : <span className="text-slate-400 italic">No file uploaded</span>}</td><td className="p-4 text-right">{isUploaded ? <div className="inline-flex items-center space-x-1.5"><button onClick={() => handleView(doc)} className="bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-xl font-bold text-xs inline-flex items-center space-x-1"><Eye className="w-3 h-3" />View</button><button onClick={() => triggerFileUpload(doc.id)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1.5 rounded-xl font-bold text-[11px] inline-flex items-center space-x-1"><RefreshCw className="w-3 h-3" />Replace</button></div> : isGenerated ? <button onClick={() => window.print()} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-xl font-bold text-xs"><FileDown className="w-3.5 h-3.5 inline mr-1" />Print / Save</button> : <button onClick={() => triggerFileUpload(doc.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-xl font-bold text-xs inline-flex items-center space-x-1.5"><UploadCloud className="w-3.5 h-3.5" />Upload File</button>}</td></tr>; })}</tbody></table></div>
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <table className="w-full text-left text-xs border-collapse">
+          <thead><tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold"><th className="p-4">Document Title</th><th className="p-4">Requirement</th><th className="p-4">Status</th><th className="p-4">Attached File</th><th className="p-4 text-right">Actions</th></tr></thead>
+          <tbody className="divide-y divide-slate-100">
+            {docs.map((doc) => {
+              const saved = uploadedDocs[doc.id];
+              return (
+                <tr key={doc.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="p-4 font-bold text-slate-900"><div className="flex items-center space-x-2"><FileText className="w-4 h-4 text-slate-400 shrink-0" /><span>{localizeDocTitle(doc.id, doc.name)}</span></div></td>
+                  <td className="p-4">{doc.mandatory ? <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">Mandatory</span> : <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">Optional</span>}</td>
+                  <td className="p-4"><span className={`inline-flex items-center space-x-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ${saved ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>{saved ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}<span>{saved ? getStatusLabel({ statusType: 'verified' }) : getStatusLabel({ statusType: 'missing' })}</span></span></td>
+                  <td className="p-4 font-mono text-[11px] text-slate-600">{saved ? <div><button onClick={() => openDocument(saved)} className="text-emerald-700 hover:text-emerald-900 underline font-semibold cursor-pointer truncate max-w-[180px]" title="View saved document">{saved.originalFileName}</button><span className="text-[10px] text-slate-400 font-sans ml-1">({formatBytes(saved.byteLength)})</span></div> : <span className="text-slate-400 italic">No file uploaded</span>}</td>
+                  <td className="p-4 text-right"><div className="inline-flex items-center gap-2">{saved ? <><button onClick={() => openDocument(saved)} className="bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-xl font-bold text-xs inline-flex items-center space-x-1"><Eye className="w-3 h-3" /><span>View</span></button><button onClick={() => triggerFileUpload(doc.id)} disabled={uploading} className="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 border border-slate-300 px-2.5 py-1.5 rounded-xl font-bold text-[11px] inline-flex items-center space-x-1"><RefreshCw className="w-3 h-3" /><span className="hidden sm:inline">Replace</span></button></> : <button onClick={() => triggerFileUpload(doc.id)} disabled={uploading} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-3.5 py-1.5 rounded-xl font-bold text-xs inline-flex items-center space-x-1.5"><UploadCloud className="w-3.5 h-3.5" /><span>Upload</span></button>}</div></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-      <div className="flex justify-end pt-2"><button onClick={onProceedToPack} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md flex items-center space-x-2 cursor-pointer"><span>View Application Pack →</span><ArrowRight className="w-3.5 h-3.5" /></button></div>
+      <div className="flex justify-end pt-2"><button onClick={onProceedToPack} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center space-x-2 cursor-pointer active:scale-95"><span>View Application Pack →</span><ArrowRight className="w-3.5 h-3.5" /></button></div>
 
-      {viewingDoc && <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4"><div className="bg-white rounded-3xl max-w-3xl w-full p-6 space-y-4 border border-slate-200 shadow-2xl relative max-h-[90vh] overflow-y-auto"><button onClick={closeViewer} className="absolute right-5 top-4 text-slate-500 hover:text-slate-900 text-xl">✕</button><div className="border-b border-slate-200 pb-4 text-center"><h3 className="text-lg font-black text-slate-900">{getDocTitle(viewingDoc.id, viewingDoc.name)}</h3><p className="text-xs text-slate-500 font-mono mt-1">File: {viewingDoc.fileName} {viewingDoc.fileSize && `(${viewingDoc.fileSize})`}</p></div>{viewingDoc.missingFile ? <div className="p-8 text-center text-slate-500">The saved file could not be found. Please upload it again.</div> : viewingDoc.recordType?.startsWith('image/') ? <div className="border rounded-2xl bg-slate-100 p-2 flex justify-center"><img src={viewingDoc.previewUrl} alt={viewingDoc.name} className="max-h-[65vh] w-auto object-contain rounded-xl shadow-md" /></div> : viewingDoc.recordType === 'application/pdf' ? <iframe src={viewingDoc.previewUrl} title={viewingDoc.name} className="w-full h-[65vh] rounded-xl border border-slate-300" /> : <div className="p-8 bg-slate-50 rounded-2xl text-center text-slate-600">Preview is not available for this file type. Use the file name above to replace it with a PDF or image for inline preview.</div>}<div className="flex justify-end"><button onClick={closeViewer} className="bg-emerald-600 text-white font-bold px-5 py-2 rounded-xl text-xs">Done</button></div></div></div>}
+      {viewingDoc && <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4"><div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-4 border border-slate-200 shadow-2xl relative max-h-[90vh] overflow-y-auto"><button onClick={() => { if (viewingDoc.previewUrl) URL.revokeObjectURL(viewingDoc.previewUrl); setViewingDoc(null); }} className="absolute right-5 top-5 text-slate-400 hover:text-slate-700 font-bold">✕</button><div className="border-b border-slate-200 pb-4 text-center"><div className="inline-flex items-center space-x-2 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider"><Sparkles className="w-3 h-3 text-emerald-600" /><span>Saved Beneficiary Document</span></div><h3 className="text-lg font-black text-slate-900 mt-2">{localizeDocTitle(viewingDoc.id, docs.find((d) => d.id === viewingDoc.id)?.name || 'Document')}</h3><p className="text-xs text-slate-500 font-mono mt-1">{viewingDoc.originalFileName} ({formatBytes(viewingDoc.byteLength)})</p></div><div className="border rounded-2xl overflow-hidden bg-slate-100 p-2 min-h-[300px] flex items-center justify-center">{(viewingDoc.contentType || '').startsWith('image/') ? <img src={viewingDoc.previewUrl} alt={viewingDoc.originalFileName} className="max-h-[60vh] w-auto mx-auto object-contain rounded-xl shadow-md" /> : <iframe src={viewingDoc.previewUrl} title={viewingDoc.originalFileName} className="w-full h-[60vh] rounded-xl border border-slate-300" />}</div><div className="flex items-center justify-between"><button onClick={() => deleteDocument(viewingDoc)} className="text-xs font-bold text-rose-700 hover:text-rose-800 flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" />Delete</button><div className="flex items-center gap-2"><button onClick={() => { const a = document.createElement('a'); a.href = viewingDoc.previewUrl; a.download = viewingDoc.originalFileName; a.click(); }} className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5"><FileDown className="w-3.5 h-3.5" />Download</button><button onClick={() => { if (viewingDoc.previewUrl) URL.revokeObjectURL(viewingDoc.previewUrl); setViewingDoc(null); }} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2 rounded-xl text-xs">Done</button></div></div></div></div>}
+
+      {loadingDocs && <div className="fixed bottom-4 right-4 bg-white border border-slate-200 shadow-lg rounded-xl px-4 py-2 text-xs font-bold text-slate-600">Loading saved documents…</div>}
     </div>
   );
 }
