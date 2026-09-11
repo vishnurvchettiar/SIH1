@@ -1,358 +1,75 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  ArrowRight, 
-  Sparkles, 
-  Layers, 
-  CheckCircle2, 
-  Calculator, 
-  ShieldCheck, 
-  Coins, 
-  Building2,
-  TrendingUp,
-  MapPin,
-  Briefcase
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowRight, Sparkles, CheckCircle2, ShieldCheck, Coins, Calculator, Building2, MapPin, Briefcase } from 'lucide-react';
+import { getTranslations } from '../../translations';
 
-export default function LandingHero({ 
-  onStartOnboarding, 
-  onExploreSchemes, 
-  onQuickFind,
-  lang = 'en'
-}) {
-  const isHindi = lang === 'hi';
+const copy = {
+  en: {
+    slides: [
+      ['MINISTRY OF SOCIAL JUSTICE & MSME | NATIONAL CONCESSIONAL CREDIT', "Empowering India's Grassroots Entrepreneurs With Concessional Capital", 'Financial assistance up to ₹50 Lakhs with eligible concessional credit and support for suitable entrepreneurs.', 'PM-SURAJ & NSFDC ALIGNED'],
+      ['FROM LOCAL SKILL TO PROFITABLE ENTERPRISE', 'Turn Your Business Dream Into Reality', 'Start a tailoring unit, repair lab, transport activity, food enterprise or other eligible business with SchemeReady guidance.', 'EXPLAINABLE MATCHING'],
+      ['ZERO DIRECT REJECTIONS | ACTIVE CHANNEL FINANCE', 'Become Application Ready Before You Visit the Partner', 'SchemeReady helps prepare your profile, documents, project report and channel-partner route.', 'ACTIVE CHANNEL ROUTING']
+    ],
+    start: 'Start Smart Onboarding (2 Min)', schemes: 'Explore All Schemes', rates: 'Concessional Rates', upTo: 'Eligible Loan Support', digi: 'DigiLocker Ready', overdue: 'Verified Partner', quick: 'Instant Eligibility Check', finder: 'Find Your Applicable Scheme', helper: 'Enter basic details to see the matching workflow.', business: 'What business do you want to start?', location: 'Business Location (District / State)', loan: 'Estimated Loan Needed', check: 'Check Matching Schemes', micro: 'Micro', term: 'Term', income: 'Income ≤ ₹5L Eligible', funding: 'Up to 90% Project Financing', prev: 'Previous Slide', next: 'Next Slide'
+  },
+  hi: {
+    slides: [
+      ['सामाजिक न्याय एवं एमएसएमई मंत्रालय | राष्ट्रीय रियायती ऋण', 'रियायती पूंजी से भारत के जमीनी उद्यमियों को सशक्त बनाना', 'उपयुक्त उद्यमियों के लिए पात्र रियायती ऋण और सहायता के साथ ₹50 लाख तक की वित्तीय सहायता।', 'PM-SURAJ एवं NSFDC संरेखित'],
+      ['स्थानीय कौशल से लाभदायक उद्यम की ओर', 'अपने व्यवसाय के सपने को वास्तविकता बनाएं', 'सिलाई, रिपेयर, परिवहन, खाद्य या अन्य पात्र व्यवसाय के लिए SchemeReady मार्गदर्शन।', 'स्पष्ट योजना मिलान'],
+      ['सक्रिय चैनल वित्त | आवेदन सहायता', 'पार्टनर के पास जाने से पहले आवेदन तैयार करें', 'प्रोफ़ाइल, दस्तावेज़, प्रोजेक्ट रिपोर्ट और चैनल पार्टनर रूट तैयार करने में सहायता।', 'सक्रिय रूटिंग']
+    ],
+    start: 'स्मार्ट ऑनबोर्डिंग शुरू करें', schemes: 'सभी योजनाएँ देखें', rates: 'रियायती दरें', upTo: 'पात्र ऋण सहायता', digi: 'डिजिलॉकर तैयार', overdue: 'सत्यापित पार्टनर', quick: 'तत्काल पात्रता जाँच', finder: 'अपनी लागू योजना खोजें', helper: 'मिलान प्रक्रिया देखने के लिए मूल विवरण भरें।', business: 'आप कौन सा व्यवसाय शुरू करना चाहते हैं?', location: 'व्यवसाय का स्थान (जिला / राज्य)', loan: 'अनुमानित ऋण आवश्यकता', check: 'मिलान वाली योजनाएँ जाँचें', micro: 'माइक्रो', term: 'टर्म', income: 'आय ≤ ₹5 लाख पात्र', funding: 'परियोजना लागत का 90% तक वित्तपोषण', prev: 'पिछली स्लाइड', next: 'अगली स्लाइड'
+  },
+  kn: {
+    slides: [
+      ['ಸಾಮಾಜಿಕ ನ್ಯಾಯ ಮತ್ತು MSME ಸಚಿವಾಲಯ | ರಾಷ್ಟ್ರೀಯ ರಿಯಾಯಿತಿ ಸಾಲ', 'ರಿಯಾಯಿತಿ ಬಂಡವಾಳದೊಂದಿಗೆ ನೆಲಮಟ್ಟದ ಉದ್ಯಮಿಗಳನ್ನು ಸಬಲಗೊಳಿಸುವುದು', 'ಅರ್ಹ ಉದ್ಯಮಿಗಳಿಗೆ ₹50 ಲಕ್ಷದವರೆಗೆ ಯೋಜನೆ ಆಧಾರಿತ ರಿಯಾಯಿತಿ ಸಾಲ ಮತ್ತು ಬೆಂಬಲ.', 'PM-SURAJ ಮತ್ತು NSFDC ಅನುಗುಣ'],
+      ['ಸ್ಥಳೀಯ ಕೌಶಲ್ಯದಿಂದ ಲಾಭದಾಯಕ ಉದ್ಯಮದತ್ತ', 'ನಿಮ್ಮ ವ್ಯವಹಾರ ಕನಸನ್ನು ವಾಸ್ತವವಾಗಿಸಿ', 'ಟೈಲರಿಂಗ್, ರಿಪೇರಿ, ಸಾರಿಗೆ, ಆಹಾರ ಅಥವಾ ಇತರ ಅರ್ಹ ಉದ್ಯಮಗಳಿಗೆ SchemeReady ಮಾರ್ಗದರ್ಶನ.', 'ಸ್ಪಷ್ಟ ಯೋಜನೆ ಹೊಂದಾಣಿಕೆ'],
+      ['ಸಕ್ರಿಯ ಚಾನೆಲ್ ಹಣಕಾಸು | ಅರ್ಜಿ ಸಹಾಯ', 'ಪಾಲುದಾರರನ್ನು ಭೇಟಿ ಮಾಡುವ ಮುನ್ನ ಅರ್ಜಿ ಸಿದ್ಧಗೊಳಿಸಿ', 'ಪ್ರೊಫೈಲ್, ದಾಖಲೆಗಳು, ಯೋಜನಾ ವರದಿ ಮತ್ತು ಚಾನಲ್ ಪಾಲುದಾರ ಮಾರ್ಗಕ್ಕೆ ಸಹಾಯ.', 'ಸಕ್ರಿಯ ಮಾರ್ಗದರ್ಶನ']
+    ],
+    start: 'ಸ್ಮಾರ್ಟ್ ಆನ್‌ಬೋರ್ಡಿಂಗ್ ಪ್ರಾರಂಭಿಸಿ', schemes: 'ಎಲ್ಲಾ ಯೋಜನೆಗಳನ್ನು ನೋಡಿ', rates: 'ರಿಯಾಯಿತಿ ದರಗಳು', upTo: 'ಅರ್ಹ ಸಾಲ ಸಹಾಯ', digi: 'ಡಿಜಿಲಾಕರ್ ಸಿದ್ಧ', overdue: 'ಪರಿಶೀಲಿಸಿದ ಪಾಲುದಾರ', quick: 'ತಕ್ಷಣದ ಅರ್ಹತಾ ಪರಿಶೀಲನೆ', finder: 'ನಿಮಗೆ ಅನ್ವಯಿಸುವ ಯೋಜನೆ ಹುಡುಕಿ', helper: 'ಹೊಂದಾಣಿಕೆ ಪ್ರಕ್ರಿಯೆ ನೋಡಲು ಮೂಲ ವಿವರಗಳನ್ನು ನಮೂದಿಸಿ.', business: 'ನೀವು ಯಾವ ವ್ಯಾಪಾರ ಆರಂಭಿಸಲು ಬಯಸುತ್ತೀರಿ?', location: 'ವ್ಯಾಪಾರದ ಸ್ಥಳ (ಜಿಲ್ಲೆ / ರಾಜ್ಯ)', loan: 'ಅಂದಾಜು ಸಾಲದ ಅಗತ್ಯ', check: 'ಹೊಂದುವ ಯೋಜನೆಗಳನ್ನು ಪರಿಶೀಲಿಸಿ', micro: 'ಮೈಕ್ರೋ', term: 'ಟರ್ಮ್', income: 'ಆದಾಯ ≤ ₹5 ಲಕ್ಷ ಅರ್ಹ', funding: 'ಯೋಜನಾ ವೆಚ್ಚದ 90% ವರೆಗೆ ಹಣಕಾಸು', prev: 'ಹಿಂದಿನ ಸ್ಲೈಡ್', next: 'ಮುಂದಿನ ಸ್ಲೈಡ್'
+  },
+  ta: { slides: [['சமூக நீதி மற்றும் MSME அமைச்சகம் | தேசிய சலுகைக் கடன்', 'சலுகை நிதியுடன் சிறு தொழில்முனைவோரை வலுப்படுத்துதல்', 'தகுதியான தொழில்முனைவோருக்கு திட்ட அடிப்படையிலான கடன் மற்றும் ஆதரவு.', 'PM-SURAJ & NSFDC இணக்கம்'], ['உள்ளூர் திறனிலிருந்து லாபகரமான தொழிலுக்கு', 'உங்கள் தொழில் கனவை நனவாக்குங்கள்', 'தையல், பழுது, போக்குவரத்து, உணவு மற்றும் பிற தகுதியான தொழில்களுக்கு வழிகாட்டல்.', 'தெளிவான திட்ட பொருத்தம்'], ['செயலில் உள்ள சேனல் நிதி | விண்ணப்ப உதவி', 'பங்குதாரரை சந்திக்கும் முன் விண்ணப்பத்தைத் தயார் செய்யுங்கள்', 'சுயவிவரம், ஆவணங்கள், திட்ட அறிக்கை மற்றும் சேனல் வழியைத் தயாரிக்க உதவி.', 'செயலில் உள்ள வழிகாட்டல்']], start: 'ஸ்மார்ட் ஆன்போர்டிங்கைத் தொடங்குங்கள்', schemes: 'அனைத்து திட்டங்களையும் பார்க்க', rates: 'சலுகை வட்டி', upTo: 'தகுதியான கடன் ஆதரவு', digi: 'DigiLocker தயார்', overdue: 'சரிபார்க்கப்பட்ட பங்குதாரர்', quick: 'உடனடி தகுதி சோதனை', finder: 'உங்களுக்கு பொருந்தும் திட்டத்தை கண்டறியுங்கள்', helper: 'பொருத்தத்தை பார்க்க அடிப்படை விவரங்களை உள்ளிடுங்கள்.', business: 'எந்த தொழிலைத் தொடங்க விரும்புகிறீர்கள்?', location: 'தொழில் இருப்பிடம் (மாவட்டம் / மாநிலம்)', loan: 'மதிப்பிடப்பட்ட கடன் தேவை', check: 'பொருந்தும் திட்டங்களைச் சரிபார்க்கவும்', micro: 'மைக்ரோ', term: 'டெர்ம்', income: 'வருமானம் ≤ ₹5 லட்சம் தகுதி', funding: 'திட்டச் செலவில் 90% வரை நிதி', prev: 'முந்தைய ஸ்லைடு', next: 'அடுத்த ஸ்லைடு' },
+  te: { slides: [['సామాజిక న్యాయం & MSME మంత్రిత్వ శాఖ | జాతీయ రాయితీ రుణం', 'రాయితీ మూలధనంతో చిన్న వ్యాపారవేత్తలకు సాధికారత', 'అర్హత ఉన్న వ్యాపారాలకు ప్రాజెక్ట్ ఆధారిత రుణ సహాయం.', 'PM-SURAJ & NSFDC అనుసరణ'], ['స్థానిక నైపుణ్యం నుంచి లాభదాయక వ్యాపారానికి', 'మీ వ్యాపార కలను సాకారం చేసుకోండి', 'టైలరింగ్, రిపేర్, రవాణా, ఫుడ్ మరియు ఇతర అర్హత కలిగిన వ్యాపారాలకు మార్గదర్శకం.', 'స్పష్టమైన పథకం సరిపోలిక'], ['క్రియాశీల ఛానల్ ఫైనాన్స్ | దరఖాస్తు సహాయం', 'భాగస్వామిని కలిసే ముందు దరఖాస్తు సిద్ధం చేయండి', 'ప్రొఫైల్, పత్రాలు, ప్రాజెక్ట్ రిపోర్ట్ మరియు ఛానల్ మార్గాన్ని సిద్ధం చేయడంలో సహాయం.', 'క్రియాశీల మార్గదర్శకం']], start: 'స్మార్ట్ ఆన్‌బోర్డింగ్ ప్రారంభించండి', schemes: 'అన్ని పథకాలు చూడండి', rates: 'రాయితీ రేట్లు', upTo: 'అర్హత కలిగిన రుణ సహాయం', digi: 'DigiLocker సిద్ధం', overdue: 'ధృవీకరించిన భాగస్వామి', quick: 'తక్షణ అర్హత తనిఖీ', finder: 'మీకు సరిపోయే పథకాన్ని కనుగొనండి', helper: 'సరిపోలిక చూడటానికి ప్రాథమిక వివరాలు నమోదు చేయండి.', business: 'మీరు ఏ వ్యాపారం ప్రారంభించాలనుకుంటున్నారు?', location: 'వ్యాపార స్థానం (జిల్లా / రాష్ట్రం)', loan: 'అంచనా రుణ అవసరం', check: 'సరిపోలే పథకాలను తనిఖీ చేయండి', micro: 'మైక్రో', term: 'టర్మ్', income: 'ఆదాయం ≤ ₹5 లక్షలు అర్హత', funding: 'ప్రాజెక్టు ఖర్చులో 90% వరకు ఫైనాన్స్', prev: 'మునుపటి స్లైడ్', next: 'తదుపరి స్లైడ్' },
+  mr: { slides: [['सामाजिक न्याय आणि MSME मंत्रालय | राष्ट्रीय सवलतीचे कर्ज', 'सवलतीच्या भांडवलाने उद्योजकांना सक्षम करणे', 'पात्र उद्योजकांसाठी प्रकल्पाधारित कर्ज व सहाय्य.', 'PM-SURAJ आणि NSFDC अनुरूप'], ['स्थानिक कौशल्यातून फायदेशीर व्यवसायाकडे', 'तुमचे व्यवसाय स्वप्न पूर्ण करा', 'शिवणकाम, दुरुस्ती, वाहतूक, खाद्य आणि इतर पात्र व्यवसायांसाठी मार्गदर्शन.', 'स्पष्ट योजना जुळणी'], ['सक्रिय चॅनेल वित्त | अर्ज सहाय्य', 'भागीदाराला भेटण्यापूर्वी अर्ज तयार करा', 'प्रोफाइल, कागदपत्रे, प्रकल्प अहवाल आणि चॅनेल मार्ग तयार करण्यात मदत.', 'सक्रिय मार्गदर्शन']], start: 'स्मार्ट ऑनबोर्डिंग सुरू करा', schemes: 'सर्व योजना पहा', rates: 'सवलतीचे दर', upTo: 'पात्र कर्ज सहाय्य', digi: 'DigiLocker तयार', overdue: 'सत्यापित भागीदार', quick: 'त्वरित पात्रता तपासणी', finder: 'तुमच्यासाठी लागू योजना शोधा', helper: 'जुळणी पाहण्यासाठी मूलभूत तपशील भरा.', business: 'तुम्हाला कोणता व्यवसाय सुरू करायचा आहे?', location: 'व्यवसायाचे ठिकाण (जिल्हा / राज्य)', loan: 'अंदाजित कर्ज गरज', check: 'जुळणाऱ्या योजना तपासा', micro: 'मायक्रो', term: 'टर्म', income: 'उत्पन्न ≤ ₹5 लाख पात्र', funding: 'प्रकल्प खर्चाच्या 90% पर्यंत वित्त', prev: 'मागील स्लाइड', next: 'पुढील स्लाइड' },
+  bn: { slides: [['সামাজিক ন্যায় ও MSME মন্ত্রণালয় | জাতীয় রেয়াতি ঋণ', 'রেয়াতি মূলধনে ক্ষুদ্র উদ্যোক্তাদের ক্ষমতায়ন', 'যোগ্য উদ্যোক্তাদের জন্য প্রকল্পভিত্তিক ঋণ ও সহায়তা.', 'PM-SURAJ ও NSFDC সঙ্গতিপূর্ণ'], ['স্থানীয় দক্ষতা থেকে লাভজনক উদ্যোগে', 'আপনার ব্যবসার স্বপ্নকে বাস্তব করুন', 'টেইলারিং, রিপেয়ার, পরিবহন, খাদ্য ও অন্যান্য যোগ্য ব্যবসার জন্য নির্দেশনা.', 'স্বচ্ছ স্কিম ম্যাচিং'], ['সক্রিয় চ্যানেল ফাইন্যান্স | আবেদন সহায়তা', 'পার্টনারের কাছে যাওয়ার আগে আবেদন প্রস্তুত করুন', 'প্রোফাইল, নথি, প্রকল্প রিপোর্ট এবং চ্যানেল রুট তৈরিতে সহায়তা.', 'সক্রিয় রুটিং']], start: 'স্মার্ট অনবোর্ডিং শুরু করুন', schemes: 'সব স্কিম দেখুন', rates: 'রেয়াতি হার', upTo: 'যোগ্য ঋণ সহায়তা', digi: 'DigiLocker প্রস্তুত', overdue: 'যাচাইকৃত পার্টনার', quick: 'তাৎক্ষণিক যোগ্যতা যাচাই', finder: 'আপনার জন্য প্রযোজ্য স্কিম খুঁজুন', helper: 'ম্যাচিং দেখতে মৌলিক তথ্য দিন.', business: 'আপনি কোন ব্যবসা শুরু করতে চান?', location: 'ব্যবসার অবস্থান (জেলা / রাজ্য)', loan: 'আনুমানিক ঋণের প্রয়োজন', check: 'ম্যাচিং স্কিম পরীক্ষা করুন', micro: 'মাইক্রো', term: 'টার্ম', income: 'আয় ≤ ₹5 লক্ষ যোগ্য', funding: 'প্রকল্প খরচের 90% পর্যন্ত অর্থায়ন', prev: 'আগের স্লাইড', next: 'পরের স্লাইড' }
+};
+
+export default function LandingHero({ onStartOnboarding, onExploreSchemes, onQuickFind, lang = 'en' }) {
+  const t = getTranslations(lang);
+  const c = copy[lang] || copy.en;
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const autoplayRef = useRef(null);
-
-  // Quick Eligibility Finder state
   const [quickBusiness, setQuickBusiness] = useState('tailoring');
   const [quickLocation, setQuickLocation] = useState('Bengaluru');
   const [quickAmount, setQuickAmount] = useState('150000');
+  const slides = c.slides;
 
-  const slides = [
-    {
-      id: 1,
-      image: '/images/slide1_summit.jpg',
-      tagline: isHindi 
-        ? 'सामाजिक न्याय एवं एमएसएमई मंत्रालय | राष्ट्रीय रियायती ऋण' 
-        : 'MINISTRY OF SOCIAL JUSTICE & MSME | NATIONAL CONCESSIONAL CREDIT',
-      headline: isHindi 
-        ? 'रियायती पूंजी के साथ भारत के जमीनी स्तर के उद्यमियों का सशक्तिकरण' 
-        : 'Empowering India\'s Grassroots Entrepreneurs With Concessional Capital',
-      subheadline: isHindi 
-        ? 'अनुसूचित जाति, अन्य पिछड़ा वर्ग, महिला और नए उद्यमियों के लिए ₹5.00 लाख तक की पारिवारिक आय पर 4.0% से 8.0% ब्याज दर पर ₹50 लाख तक की वित्तीय सहायता (90% तक परियोजना लागत कवर)।' 
-        : 'Financial assistance up to ₹50 Lakhs at 4.0% to 8.0% interest rate covering up to 90% project cost for SC, OBC, Women & first-time business founders with family income up to ₹5.00 Lakhs.',
-      badge: isHindi ? 'PM-SURAJ एवं NSFDC संरेखित' : 'PM-SURAJ & NSFDC ALIGNED'
-    },
-    {
-      id: 2,
-      image: '/images/slide2_students.webp',
-      tagline: isHindi 
-        ? 'स्थानीय हुनर से लाभदायक उद्यम की ओर' 
-        : 'FROM LOCAL SKILL TO PROFITABLE ENTERPRISE',
-      headline: isHindi 
-        ? 'बिना संपार्श्विक परेशानी के अपने व्यावसायिक सपने को साकार करें' 
-        : 'Turn Your Business Dream Into Reality With Zero Collateral Hassles',
-      subheadline: isHindi 
-        ? 'चाहे सिलाई इकाई, मोबाइल रिपेयर लैब, सौर ऊर्जा उद्यम, या खाद्य प्रसंस्करण इकाई शुरू करनी हो—डिजिलॉकर से सत्यापित हों, एआई से व्यवहार्यता जांचें और सरकारी ऋण प्राप्त करें।' 
-        : 'Whether starting a tailoring unit, mobile repair lab, solar venture, or food processing unit—get verified through DigiLocker, assess viability with AI, and access subsidized government credit.',
-      badge: isHindi ? '100% स्पष्टीकरण योग्य मिलान' : '100% EXPLAINABLE MATCHING'
-    },
-    {
-      id: 3,
-      image: '/images/slide3_team.jpg',
-      tagline: isHindi 
-        ? 'शून्य प्रत्यक्ष अस्वीकृति | सक्रिय चैनल वित्त' 
-        : 'ZERO DIRECT REJECTIONS | ACTIVE CHANNEL FINANCE',
-      headline: isHindi 
-        ? 'सीधे आवेदन अक्सर खारिज होते हैं। हम आपको 100% बैंक-तैयार बनाते हैं।' 
-        : 'Direct Applications Get Rejected. We Make You 100% Bank Ready.',
-      subheadline: isHindi 
-        ? 'राष्ट्रीय निगम विशेष रूप से 100+ चैनल पार्टनर्स (एससीए और बैंकों) के माध्यम से ऋण वितरित करते हैं। स्कीम रेडी आपकी बैंक योग्य डीपीआर तैयार करता है और अनुपालन सुनिश्चित करता है।' 
-        : 'National corporations route loans exclusively via 100+ Channel Partners (SCAs & Banks). SchemeReady prepares your bankable DPR, verifies compliance, and routes you to high-performing branches.',
-      badge: isHindi ? 'सक्रिय चैनल रूटिंग' : 'ACTIVE CHANNEL ROUTING'
-    }
-  ];
+  const nextSlide = () => setCurrentSlide(prev => (prev + 1) % slides.length);
+  const prevSlide = () => setCurrentSlide(prev => (prev - 1 + slides.length) % slides.length);
+  useEffect(() => { if (!isPaused) autoplayRef.current = setInterval(nextSlide, 5500); return () => clearInterval(autoplayRef.current); }, [isPaused, currentSlide]);
+  const handleQuickSubmit = e => { e.preventDefault(); onQuickFind?.({ businessType: quickBusiness, location: quickLocation, requiredLoanAmount: parseInt(quickAmount) || 150000 }); };
 
-  const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % slides.length);
-  };
-
-  const prevSlide = () => {
-    setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
-  };
-
-  useEffect(() => {
-    if (!isPaused) {
-      autoplayRef.current = setInterval(() => {
-        nextSlide();
-      }, 5500);
-    }
-    return () => clearInterval(autoplayRef.current);
-  }, [isPaused, currentSlide]);
-
-  const handleQuickSubmit = (e) => {
-    e.preventDefault();
-    if (onQuickFind) {
-      onQuickFind({
-        businessType: quickBusiness,
-        location: quickLocation,
-        requiredLoanAmount: parseInt(quickAmount) || 150000
-      });
-    }
-  };
-
-  return (
-    <div 
-      className="relative w-full min-h-[500px] lg:min-h-[580px] bg-slate-950 text-white overflow-hidden"
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
-    >
-      {/* Background Slides */}
-      {slides.map((slide, index) => {
-        const isActive = index === currentSlide;
-        return (
-          <div
-            key={slide.id}
-            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-              isActive ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none'
-            }`}
-          >
-            <div
-              className={`absolute inset-0 bg-cover bg-center transition-transform duration-10000 ease-out ${
-                isActive ? 'scale-110' : 'scale-100'
-              }`}
-              style={{ backgroundImage: `url(${slide.image})` }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/85 to-slate-900/60" />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-slate-950/80" />
-            <div className="absolute inset-0 bg-tech-grid opacity-25 pointer-events-none" />
-          </div>
-        );
-      })}
-
-      {/* Floating Gradient Blobs */}
-      <div className="absolute -top-24 -left-24 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none z-20" />
-      <div className="absolute top-1/2 -right-24 w-96 h-96 bg-amber-500/15 rounded-full blur-3xl pointer-events-none z-20" />
-
-      {/* Hero Content Container */}
-      <div className="relative z-30 max-w-7xl mx-auto px-4 sm:px-6 py-10 lg:py-14 flex flex-col justify-center min-h-[500px] lg:min-h-[580px]">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-center">
-          
-          {/* Left Column: Mission Narrative & CTAs */}
-          <div className="lg:col-span-7 space-y-5 text-left">
-            <div className="inline-flex items-center space-x-2 bg-white/10 backdrop-blur-md border border-emerald-500/30 px-3.5 py-1.5 rounded-full shadow-inner">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              <span className="text-[10px] sm:text-[11px] font-extrabold tracking-wider text-emerald-300 uppercase font-mono">
-                {slides[currentSlide].tagline}
-              </span>
-            </div>
-
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-[1.2] drop-shadow-md">
-              {slides[currentSlide].headline}
-            </h1>
-
-            <p className="text-xs sm:text-sm text-slate-300 font-normal leading-relaxed max-w-2xl drop-shadow-sm">
-              {slides[currentSlide].subheadline}
-            </p>
-
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <button
-                onClick={onStartOnboarding}
-                className="inline-flex items-center space-x-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-black text-xs sm:text-sm px-6 py-3.5 rounded-xl shadow-lg shadow-emerald-500/25 transition-all transform hover:scale-[1.02] active:scale-95 cursor-pointer"
-              >
-                <span>{isHindi ? 'स्मार्ट ऑनबोर्डिंग शुरू करें (2 मिनट)' : 'Start Smart Onboarding (2 Min)'}</span>
-                <ArrowRight className="w-4 h-4 text-slate-950" />
-              </button>
-
-              <button
-                onClick={onExploreSchemes}
-                className="inline-flex items-center space-x-2 bg-slate-900/80 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm px-6 py-3.5 rounded-xl border border-white/20 backdrop-blur-md transition-all transform hover:scale-[1.02] active:scale-95 cursor-pointer"
-              >
-                <Coins className="w-4 h-4 text-amber-400" />
-                <span>{isHindi ? 'सभी 6 योजनाएं देखें' : 'Explore All 6 Schemes'}</span>
-              </button>
-            </div>
-
-            {/* Micro Highlights Pill Row */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 text-xs font-semibold text-slate-300">
-              <div className="flex items-center space-x-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl backdrop-blur-sm">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>{isHindi ? '4%–8% ब्याज दरें' : '4%–8% Rates'}</span>
-              </div>
-              <div className="flex items-center space-x-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl backdrop-blur-sm">
-                <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>{isHindi ? '₹50 लाख तक' : 'Up to ₹50 Lakhs'}</span>
-              </div>
-              <div className="flex items-center space-x-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl backdrop-blur-sm">
-                <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
-                <span>{isHindi ? 'डिजिलॉकर से त्वरित' : 'DigiLocker Fast'}</span>
-              </div>
-              <div className="flex items-center space-x-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl backdrop-blur-sm">
-                <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />
-                <span>{isHindi ? '0% अतिदेय एससीए' : '0% Overdue SCA'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column: Embedded Quick Eligibility & Scheme Finder Widget */}
-          <div className="lg:col-span-5">
-            <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 sm:p-7 border border-emerald-500/30 shadow-2xl text-slate-900 relative">
-              <div className="absolute -top-3 right-6 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 text-[10px] font-black px-3 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
-                {isHindi ? 'त्वरित पात्रता कैलकुलेटर' : 'Instant Fit Calculator'}
-              </div>
-
-              <div className="space-y-1 mb-5">
-                <div className="flex items-center space-x-2 text-emerald-700 font-bold text-xs uppercase tracking-wider">
-                  <Sparkles className="w-4 h-4" />
-                  <span>{isHindi ? 'स्कीम रेडी पात्रता जांच' : 'SchemeReady Eligibility Check'}</span>
-                </div>
-                <h3 className="text-xl font-black text-slate-900 tracking-tight">
-                  {isHindi ? 'अपनी रियायती योजना खोजें' : 'Find Your Concessional Scheme'}
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  {isHindi 
-                    ? 'गारंटीकृत सरकारी योजनाओं को देखने के लिए अपना व्यवसाय प्रकार और ऋण आवश्यकता दर्ज करें।' 
-                    : 'Enter your business type & loan requirement to see guaranteed matching government schemes.'}
-                </p>
-              </div>
-
-              <form onSubmit={handleQuickSubmit} className="space-y-4 text-xs font-semibold text-slate-700">
-                {/* Business Type */}
-                <div className="space-y-1 text-left">
-                  <label className="block text-[11px] text-slate-600 font-bold">
-                    {isHindi ? 'आप कौन सा व्यवसाय शुरू करना चाहते हैं?' : 'What business do you want to start?'}
-                  </label>
-                  <div className="relative">
-                    <Briefcase className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <select
-                      value={quickBusiness}
-                      onChange={(e) => setQuickBusiness(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-emerald-500 cursor-pointer"
-                    >
-                      <option value="tailoring">{isHindi ? 'सिलाई एवं परिधान निर्माण (₹1.2L - ₹2.5L)' : 'Tailoring & Garment Making (₹1.2L - ₹2.5L)'}</option>
-                      <option value="mobile repair">{isHindi ? 'मोबाइल डिस्प्ले एवं चिप रिपेयर लैब (₹1.5L - ₹3L)' : 'Mobile Display & Chip Repair Lab (₹1.5L - ₹3L)'}</option>
-                      <option value="grocery">{isHindi ? 'किराना / प्रोविजन स्टोर (₹1L - ₹5L)' : 'Grocery / Kirana / Provision Store (₹1L - ₹5L)'}</option>
-                      <option value="ev transport">{isHindi ? 'इलेक्ट्रिक ऑटो / ई-रिक्शा परिवहन (₹3L - ₹5L)' : 'Electric Auto / Eco-Transport (₹3L - ₹5L)'}</option>
-                      <option value="food processing">{isHindi ? 'खाद्य प्रसंस्करण एवं मसाला पिसाई (₹2L - ₹10L)' : 'Food Processing & Spice Grinding (₹2L - ₹10L)'}</option>
-                      <option value="beauty salon">{isHindi ? 'ब्यूटी सैलून एवं वेलनेस स्टूडियो (₹1.5L - ₹4L)' : 'Beauty Salon & Wellness Studio (₹1.5L - ₹4L)'}</option>
-                      <option value="light manufacturing">{isHindi ? 'लघु विनिर्माण / सीएनसी वर्कशॉप (₹5L - ₹25L)' : 'Small Manufacturing / CNC Workshop (₹5L - ₹25L)'}</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Location */}
-                <div className="space-y-1 text-left">
-                  <label className="block text-[11px] text-slate-600 font-bold">
-                    {isHindi ? 'व्यवसाय का स्थान (जिला / राज्य)' : 'Business Location (District / State)'}
-                  </label>
-                  <div className="relative">
-                    <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <select
-                      value={quickLocation}
-                      onChange={(e) => setQuickLocation(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-emerald-500 cursor-pointer"
-                    >
-                      <option value="Bengaluru">{isHindi ? 'बेंगलुरु (कर्नाटक - एससीए सक्रिय)' : 'Bengaluru (Karnataka - SCA Active)'}</option>
-                      <option value="Mumbai">{isHindi ? 'मुंबई (महाराष्ट्र - एमपीबीसीडीसी सक्रिय)' : 'Mumbai (Maharashtra - MPBCDC Active)'}</option>
-                      <option value="Pune">{isHindi ? 'पुणे (महाराष्ट्र - एमपीबीसीडीसी सक्रिय)' : 'Pune (Maharashtra - MPBCDC Active)'}</option>
-                      <option value="Lucknow">{isHindi ? 'लखनऊ (उत्तर प्रदेश - यूपीएससीडीसी सक्रिय)' : 'Lucknow (Uttar Pradesh - UPSCDC Active)'}</option>
-                      <option value="Hyderabad">{isHindi ? 'हैदराबाद (तेलंगाना - टीएसएससीडीसी सक्रिय)' : 'Hyderabad (Telangana - TSSCDC Active)'}</option>
-                      <option value="Chennai">{isHindi ? 'चेन्नई (तमिलनाडु - टीएएचडीसीओ सक्रिय)' : 'Chennai (Tamil Nadu - TAHDCO Active)'}</option>
-                      <option value="Delhi">{isHindi ? 'दिल्ली एनसीआर (डीएससीएफडीसी सक्रिय)' : 'Delhi NCR (DSCFDC Active)'}</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Estimated Loan Amount */}
-                <div className="space-y-1 text-left">
-                  <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-slate-600 font-bold">
-                      {isHindi ? 'अनुमानित ऋण आवश्यकता' : 'Estimated Loan Needed'}
-                    </span>
-                    <span className="font-mono font-black text-emerald-700 text-xs">
-                      ₹{(parseInt(quickAmount) / 100000).toFixed(1)} {isHindi ? 'लाख' : 'Lakhs'}
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="50000"
-                    max="1000000"
-                    step="25000"
-                    value={quickAmount}
-                    onChange={(e) => setQuickAmount(e.target.value)}
-                    className="w-full accent-emerald-600 cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                    <span>{isHindi ? '₹50,000 (माइक्रो)' : '₹50,000 (Micro)'}</span>
-                    <span>₹5,00,000</span>
-                    <span>{isHindi ? '₹10,00,000 (मियादी)' : '₹10,00,000 (Term)'}</span>
-                  </div>
-                </div>
-
-                {/* Instant Match Submit */}
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-600/30 transition-all flex items-center justify-center space-x-2 cursor-pointer active:scale-95"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>{isHindi ? 'तत्काल मिलान वाली योजनाएं जांचें' : 'Check Instant Matching Schemes'}</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </form>
-
-              <div className="mt-4 pt-3 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500">
-                <span className="flex items-center space-x-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{isHindi ? 'आय ≤ ₹5 लाख पात्र' : 'Income ≤ ₹5L Eligible'}</span>
-                </span>
-                <span className="text-emerald-700 font-bold font-mono">
-                  {isHindi ? '90% तक सरकारी वित्तपोषण' : 'Up to 90% Govt Funding'}
-                </span>
-              </div>
-            </div>
-          </div>
-
+  return <div className="relative w-full min-h-[500px] lg:min-h-[580px] bg-slate-950 text-white overflow-hidden" onMouseEnter={() => setIsPaused(true)} onMouseLeave={() => setIsPaused(false)}>
+    {slides.map((slide, index) => <div key={index} className={`absolute inset-0 transition-opacity duration-1000 ${index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none'}`}>
+      <div className="absolute inset-0 bg-slate-900" /><div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/85 to-slate-900/60" />
+    </div>)}
+    <div className="relative z-30 max-w-7xl mx-auto px-4 sm:px-6 py-10 lg:py-14 flex flex-col justify-center min-h-[500px] lg:min-h-[580px]">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-center">
+        <div className="lg:col-span-7 space-y-5 text-left">
+          <div className="inline-flex items-center space-x-2 bg-white/10 border border-emerald-500/30 px-3.5 py-1.5 rounded-full"><span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" /><span className="text-[10px] sm:text-[11px] font-extrabold tracking-wider text-emerald-300 uppercase font-mono">{slide[0]}</span></div>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-[1.2]">{slide[1]}</h1>
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">{slide[2]}</p>
+          <div className="flex flex-wrap items-center gap-3 pt-2"><button onClick={onStartOnboarding} className="inline-flex items-center space-x-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-slate-950 font-black text-xs sm:text-sm px-6 py-3.5 rounded-xl shadow-lg"><span>{c.start}</span><ArrowRight className="w-4 h-4" /></button><button onClick={onExploreSchemes} className="inline-flex items-center space-x-2 bg-slate-900/80 text-white font-bold text-xs sm:text-sm px-6 py-3.5 rounded-xl border border-white/20"><Coins className="w-4 h-4 text-amber-400" /><span>{c.schemes}</span></button></div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 text-xs font-semibold text-slate-300"><div className="flex items-center space-x-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl"><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span>{c.rates}</span></div><div className="flex items-center space-x-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl"><CheckCircle2 className="w-4 h-4 text-amber-400" /><span>{c.upTo}</span></div><div className="flex items-center space-x-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl"><CheckCircle2 className="w-4 h-4 text-teal-400" /><span>{c.digi}</span></div><div className="flex items-center space-x-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl"><CheckCircle2 className="w-4 h-4 text-blue-400" /><span>{c.overdue}</span></div></div>
         </div>
-      </div>
-
-      {/* Carousel Dots & Controls */}
-      <div className="absolute z-30 bottom-4 left-4 right-4 max-w-7xl mx-auto flex items-center justify-between pointer-events-none">
-        <div className="flex items-center space-x-2 pointer-events-auto bg-slate-900/70 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
-          {slides.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => setCurrentSlide(idx)}
-              className={`h-2 transition-all duration-300 rounded-full cursor-pointer ${
-                idx === currentSlide ? 'w-8 bg-emerald-400' : 'w-2 bg-white/30 hover:bg-white/60'
-              }`}
-              aria-label={`Go to slide ${idx + 1}`}
-            />
-          ))}
-          <span className="text-[10px] font-mono text-slate-400 pl-1">
-            0{currentSlide + 1} / 0{slides.length}
-          </span>
-        </div>
-
-        <div className="flex items-center space-x-2 pointer-events-auto">
-          <button
-            onClick={prevSlide}
-            className="w-9 h-9 rounded-xl bg-slate-900/70 hover:bg-slate-800 border border-white/15 backdrop-blur-md flex items-center justify-center text-white hover:text-emerald-400 transition-all shadow-md active:scale-90 cursor-pointer"
-            aria-label="Previous Slide"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={nextSlide}
-            className="w-9 h-9 rounded-xl bg-slate-900/70 hover:bg-slate-800 border border-white/15 backdrop-blur-md flex items-center justify-center text-white hover:text-emerald-400 transition-all shadow-md active:scale-90 cursor-pointer"
-            aria-label="Next Slide"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
+        <div className="lg:col-span-5"><div className="bg-white/95 rounded-3xl p-6 sm:p-7 border border-emerald-500/30 shadow-2xl text-slate-900 relative"><div className="absolute -top-3 right-6 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 text-[10px] font-black px-3 py-0.5 rounded-full uppercase tracking-wider">{c.quick}</div><div className="space-y-1 mb-5"><div className="flex items-center space-x-2 text-emerald-700 font-bold text-xs uppercase tracking-wider"><Sparkles className="w-4 h-4" /><span>{c.finder}</span></div><h3 className="text-xl font-black text-slate-900">{c.finder}</h3><p className="text-xs text-slate-500 font-medium">{c.helper}</p></div>
+          <form onSubmit={handleQuickSubmit} className="space-y-4 text-xs font-semibold text-slate-700"><div className="space-y-1"><label className="block text-[11px] text-slate-600 font-bold">{c.business}</label><div className="relative"><Briefcase className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" /><select value={quickBusiness} onChange={e => setQuickBusiness(e.target.value)} className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900"><option value="tailoring">Tailoring</option><option value="mobile repair">Mobile Repair</option><option value="grocery">Grocery</option><option value="food processing">Food Processing</option><option value="beauty salon">Beauty Salon</option><option value="transport">Transport</option></select></div></div>
+            <div className="space-y-1"><label className="block text-[11px] text-slate-600 font-bold">{c.location}</label><div className="relative"><MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" /><select value={quickLocation} onChange={e => setQuickLocation(e.target.value)} className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900"><option>Bengaluru</option><option>Mumbai</option><option>Pune</option><option>Lucknow</option><option>Hyderabad</option><option>Chennai</option><option>Delhi</option></select></div></div>
+            <div className="space-y-1"><div className="flex justify-between items-center text-[11px]"><span className="text-slate-600 font-bold">{c.loan}</span><span className="font-mono font-black text-emerald-700">₹{(parseInt(quickAmount) / 100000).toFixed(1)} Lakh</span></div><input type="range" min="50000" max="1000000" step="25000" value={quickAmount} onChange={e => setQuickAmount(e.target.value)} className="w-full accent-emerald-600" /><div className="flex justify-between text-[10px] text-slate-400 font-mono"><span>₹50,000 ({c.micro})</span><span>₹5,00,000</span><span>₹10,00,000 ({c.term})</span></div></div>
+            <button type="submit" className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs rounded-xl flex items-center justify-center space-x-2"><Sparkles className="w-4 h-4 text-amber-300" /><span>{c.check}</span><ArrowRight className="w-4 h-4" /></button></form>
+          <div className="mt-4 pt-3 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500"><span className="flex items-center space-x-1"><ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /><span>{c.income}</span></span><span className="text-emerald-700 font-bold font-mono">{c.funding}</span></div></div></div>
       </div>
     </div>
-  );
+    <div className="absolute z-30 bottom-4 left-4 right-4 max-w-7xl mx-auto flex items-center justify-between pointer-events-none"><div className="flex items-center space-x-2 pointer-events-auto bg-slate-900/70 px-3 py-1.5 rounded-full border border-white/10">{slides.map((_, idx) => <button key={idx} onClick={() => setCurrentSlide(idx)} className={`h-2 transition-all rounded-full ${idx === currentSlide ? 'w-8 bg-emerald-400' : 'w-2 bg-white/30'}`} aria-label={`${idx + 1}`} />)}<span className="text-[10px] font-mono text-slate-400 pl-1">0{currentSlide + 1} / 0{slides.length}</span></div><div className="flex items-center space-x-2 pointer-events-auto"><button onClick={prevSlide} className="w-9 h-9 rounded-xl bg-slate-900/70 border border-white/15 flex items-center justify-center text-white" aria-label={c.prev}><ChevronLeft className="w-4 h-4" /></button><button onClick={nextSlide} className="w-9 h-9 rounded-xl bg-slate-900/70 border border-white/15 flex items-center justify-center text-white" aria-label={c.next}><ChevronRight className="w-4 h-4" /></button></div></div>
+  </div>;
 }
